@@ -4,3 +4,4 @@ tqdm
 jupyter notebook
 matplotlib
 theano
+IPython
