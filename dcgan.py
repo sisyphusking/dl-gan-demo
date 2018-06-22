@@ -129,8 +129,8 @@ class DCGAN(object):
         optimizer = RMSprop(lr=0.0001, decay=3e-8)
         self.AM = Sequential()
         self.AM.add(self.generator())
-        # 需要冻结判定器权重
-        is_tranable(self.discriminator(), False)
+        # 冻结判定器权重，这一步可以不在这里处理
+        # is_tranable(self.discriminator(), False)
         self.AM.add(self.discriminator())
         self.AM.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
         return self.AM
@@ -163,11 +163,12 @@ class MNIST_DCGAN(object):
             y = np.ones([2*batch_size, 1])
             y[batch_size:, :] = 0  # 假图片label为0
 
-            # 开启判定器
+            # 也可以设置成self.discriminater.layer[0].trainable = True
+            # 开启判定器  这一步不能少
             is_tranable(self.discriminator, True)
             d_loss = self.discriminator.train_on_batch(x, y)  # 判定器上判定真假图片，先训练判定器
 
-            # 冻结判定器
+            # 冻结判定器  这一步不能少
             is_tranable(self.discriminator, False)
             y = np.ones([batch_size, 1])
             noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
