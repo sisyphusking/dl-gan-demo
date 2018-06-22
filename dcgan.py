@@ -10,6 +10,12 @@ from keras.optimizers import Adam, RMSprop
 import matplotlib.pyplot as plt
 
 
+def is_tranable(model, val):
+    model.trainable = val
+    for lay in model.layers:
+        lay.trainable = val
+
+
 class ElapsedTimer(object):
 
     def __init__(self):
@@ -109,7 +115,7 @@ class DCGAN(object):
         return self.G
 
     def discriminator_model(self):
-        if self.DM:
+        if self.DM:  # 如果模型存在就返回原先的
             return self.DM
         optimizer = RMSprop(lr=0.0002, decay=6e-8)
         self.DM = Sequential()
@@ -123,6 +129,8 @@ class DCGAN(object):
         optimizer = RMSprop(lr=0.0001, decay=3e-8)
         self.AM = Sequential()
         self.AM.add(self.generator())
+        # 需要冻结判定器权重
+        is_tranable(self.discriminator(), False)
         self.AM.add(self.discriminator())
         self.AM.compile(loss='binary_crossentropy', optimizer=optimizer, metrics=['accuracy'])
         return self.AM
@@ -139,32 +147,37 @@ class MNIST_DCGAN(object):
         self.x_train = self.x_train.reshape(-1, self.img_rows, self.img_cols, 1).astype(np.float32)
 
         self.DCGAN = DCGAN()
-        self.discriminator =  self.DCGAN.discriminator_model()
-        self.adversarial = self.DCGAN.adversarial_model()
+        self.discriminator = self.DCGAN.discriminator_model()  # 一个卷积神经网络
+        self.adversarial = self.DCGAN.adversarial_model()  # 两个拼接而成的卷积神经网络
         self.generator = self.DCGAN.generator()
 
     def train(self, train_steps=2000, batch_size=256, save_interval=0):
         noise_input = None
-        if save_interval>0:
+        if save_interval > 0:
             noise_input = np.random.uniform(-1.0, 1.0, size=[16, 100])
         for i in range(train_steps):
-            images_train = self.x_train[np.random.randint(0,
-                self.x_train.shape[0], size=batch_size), :, :, :]
+            images_train = self.x_train[np.random.randint(0, self.x_train.shape[0], size=batch_size), :, :, :]
             noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
-            images_fake = self.generator.predict(noise)
-            x = np.concatenate((images_train, images_fake))
+            images_fake = self.generator.predict(noise)  # 生成器生成假图片
+            x = np.concatenate((images_train, images_fake))  # 真假图片拼接
             y = np.ones([2*batch_size, 1])
-            y[batch_size:, :] = 0
-            d_loss = self.discriminator.train_on_batch(x, y)
+            y[batch_size:, :] = 0  # 假图片label为0
 
+            # 开启判定器
+            is_tranable(self.discriminator, True)
+            d_loss = self.discriminator.train_on_batch(x, y)  # 判定器上判定真假图片，先训练判定器
+
+            # 冻结判定器
+            is_tranable(self.discriminator, False)
             y = np.ones([batch_size, 1])
             noise = np.random.uniform(-1.0, 1.0, size=[batch_size, 100])
-            a_loss = self.adversarial.train_on_batch(noise, y)
+            a_loss = self.adversarial.train_on_batch(noise, y)  # gan对生成器进行训练并更新参数
+
             log_mesg = "%d: [D loss: %f, acc: %f]" % (i, d_loss[0], d_loss[1])
-            log_mesg = "%s  [A loss: %f, acc: %f]" % (log_mesg, a_loss[0], a_loss[1])
+            log_mesg = "%s  [A loss: %f, acc: %f]" % (log_mesg, a_loss[0], a_loss[1])  # log_mesg 拼接上面的
             print(log_mesg)
-            if save_interval>0:
-                if (i+1)%save_interval==0:
+            if save_interval > 0:
+                if (i+1) % save_interval == 0:
                     self.plot_images(save2file=True, samples=noise_input.shape[0], noise=noise_input, step=(i+1))
 
     def plot_images(self, save2file=False, fake=True, samples=16, noise=None, step=0):
